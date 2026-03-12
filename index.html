@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Biometric Spoofer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000; /* Pure black background to hide screen edges */
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Image Container */
+        #imageContainer {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #targetImage {
+            max-width: 100%;
+            max-height: 100%;
+            transform: scale(1) translate(0px, 0px);
+            filter: brightness(1) contrast(1.1);
+            transition: transform 0.1s;
+        }
+
+        /* Control Panel */
+        #controlPanel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(20, 20, 20, 0.9);
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            border-top: 2px solid #58a6ff;
+            transition: transform 0.3s;
+        }
+
+        .hidden {
+            transform: translateY(100%);
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        label { font-size: 14px; width: 80px; }
+        input[type="range"] { flex-grow: 1; margin: 0 10px; }
+        input[type="file"] { margin-bottom: 10px; color: white; }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #f85149;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        /* Toggle Button */
+        #toggleBtn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="toggleBtn" onclick="toggleControls()">⚙️</button>
+
+    <div id="imageContainer">
+        <img id="targetImage" src="" alt="Please upload a face image">
+    </div>
+
+    <div id="controlPanel">
+        <input type="file" id="imageUpload" accept="image/*">
+        
+        <div class="control-group">
+            <label>Zoom</label>
+            <input type="range" id="zoom" min="0.5" max="3" step="0.05" value="1">
+        </div>
+        <div class="control-group">
+            <label>Pan X</label>
+            <input type="range" id="panX" min="-200" max="200" step="1" value="0">
+        </div>
+        <div class="control-group">
+            <label>Pan Y</label>
+            <input type="range" id="panY" min="-200" max="200" step="1" value="0">
+        </div>
+        <div class="control-group">
+            <label>Light</label>
+            <input type="range" id="brightness" min="0.5" max="2" step="0.1" value="1.2">
+        </div>
+
+        <button onclick="startSpoofAttack()">Start Attack (Fullscreen)</button>
+    </div>
+
+    <script>
+        const targetImage = document.getElementById('targetImage');
+        const controlPanel = document.getElementById('controlPanel');
+        const toggleBtn = document.getElementById('toggleBtn');
+
+        // Handles Image Upload from Mobile Gallery
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    targetImage.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Live update CSS transform based on sliders
+        function updateTransform() {
+            const zoom = document.getElementById('zoom').value;
+            const panX = document.getElementById('panX').value;
+            const panY = document.getElementById('panY').value;
+            const brightness = document.getElementById('brightness').value;
+
+            targetImage.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
+            targetImage.style.filter = `brightness(${brightness}) contrast(1.1)`;
+        }
+
+        // Attach listeners to all sliders
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', updateTransform);
+        });
+
+        // Hide/Show Controls
+        function toggleControls() {
+            controlPanel.classList.toggle('hidden');
+        }
+
+        // Enter Fullscreen and keep screen awake
+        async function startSpoofAttack() {
+            // Hide UI
+            controlPanel.classList.add('hidden');
+            toggleBtn.style.display = 'none';
+
+            // Request Fullscreen
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+
+            // Request Wake Lock (keeps screen from turning off)
+            try {
+                if ('wakeLock' in navigator) {
+                    await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.log('Wake lock failed', err);
+            }
+
+            // Double tap anywhere to bring UI back
+            document.body.addEventListener('dblclick', exitAttackMode);
+        }
+
+        function exitAttackMode() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            toggleBtn.style.display = 'block';
+            controlPanel.classList.remove('hidden');
+            document.body.removeEventListener('dblclick', exitAttackMode);
+        }
+    </script>
+</body>
+</html>
