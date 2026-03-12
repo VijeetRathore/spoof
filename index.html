@@ -220,8 +220,8 @@
       left:10px;
       right:10px;
       bottom:10px;
-      z-index:26;
-      background:rgba(0,0,0,0.75);
+      z-index:60;
+      background:rgba(0,0,0,0.82);
       border:1px solid #2d2d2d;
       border-radius:12px;
       padding:10px;
@@ -234,6 +234,17 @@
       max-height:32vh;
       background:#000;
       border-radius:10px;
+      z-index:70;
+      display:block;
+    }
+
+    #playbackVideo:fullscreen{
+      width:100vw;
+      height:100vh;
+      max-height:none;
+      object-fit:contain;
+      background:#000;
+      border-radius:0;
     }
 
     .playback-top{
@@ -479,6 +490,8 @@
     function showLive() {
       freezeCanvas.style.display = 'none';
       video.style.display = 'block';
+      video.style.visibility = 'visible';
+      freezeCanvas.style.visibility = 'visible';
       els.freeze.checked = false;
       setHUD('Live camera preview');
     }
@@ -490,6 +503,8 @@
       freezeCtx.drawImage(video, 0, 0, freezeCanvas.width, freezeCanvas.height);
       video.style.display = 'none';
       freezeCanvas.style.display = 'block';
+      video.style.visibility = 'visible';
+      freezeCanvas.style.visibility = 'visible';
       els.freeze.checked = true;
       setHUD(`Frozen frame: ${freezeCanvas.width}×${freezeCanvas.height}`);
       updateView();
@@ -588,6 +603,8 @@
         URL.revokeObjectURL(playbackUrl);
         playbackUrl = null;
       }
+
+      playbackVideo.pause();
       playbackVideo.removeAttribute('src');
       playbackVideo.load();
       playbackPanel.style.display = 'none';
@@ -608,6 +625,7 @@
 
           playbackUrl = URL.createObjectURL(recordedBlob);
           playbackVideo.src = playbackUrl;
+          playbackVideo.load();
           playbackPanel.style.display = 'block';
 
           stopRecordTimer();
@@ -637,22 +655,44 @@
 
       playbackPanel.style.display = 'block';
 
-      try {
-        if (!document.fullscreenElement) {
-          await playbackVideo.requestFullscreen();
-        } else {
-          await playbackVideo.requestFullscreen();
-        }
-      } catch (e) {}
+      video.pause();
+      video.style.visibility = 'hidden';
+      freezeCanvas.style.visibility = 'hidden';
+
+      playbackVideo.style.display = 'block';
+      playbackVideo.currentTime = 0;
 
       try {
         await playbackVideo.play();
-      } catch (e) {}
+      } catch (e) {
+        console.log('Playback start error', e);
+      }
+
+      try {
+        await playbackVideo.requestFullscreen();
+      } catch (e) {
+        console.log('Fullscreen error', e);
+      }
     }
 
-    function closePlayback() {
+    async function closePlayback() {
       playbackVideo.pause();
       playbackPanel.style.display = 'none';
+
+      if (document.fullscreenElement === playbackVideo) {
+        try {
+          await document.exitFullscreen();
+        } catch (e) {}
+      }
+
+      video.style.visibility = 'visible';
+      freezeCanvas.style.visibility = 'visible';
+
+      try {
+        if (stream && !els.freeze.checked) {
+          await video.play();
+        }
+      } catch (e) {}
     }
 
     function downloadRecording() {
@@ -784,14 +824,31 @@
     });
 
     document.addEventListener('fullscreenchange', async () => {
-      const isFs = !!document.fullscreenElement;
+      const fsEl = document.fullscreenElement;
+      const isPlaybackFs = fsEl === playbackVideo;
 
-      if (isFs) {
+      if (fsEl) {
         toggleBtn.style.display = 'none';
         controls.classList.add('hidden');
-        playbackPanel.style.display = 'none';
+
+        if (!isPlaybackFs) {
+          playbackPanel.style.display = 'none';
+        }
       } else {
         toggleBtn.style.display = 'block';
+
+        if (recordedBlob) {
+          playbackPanel.style.display = 'block';
+        }
+
+        video.style.visibility = 'visible';
+        freezeCanvas.style.visibility = 'visible';
+
+        try {
+          if (stream && !els.freeze.checked) {
+            await video.play();
+          }
+        } catch (e) {}
       }
 
       if (!document.fullscreenElement && wakeLock) {
