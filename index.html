@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Preview + Recording + Light Control</title>
+  <title>Camera Preview + Recording + Playback</title>
   <style>
     :root{
       --panel-bg: rgba(18,18,18,0.94);
@@ -44,13 +44,13 @@
       filter: brightness(0.92) contrast(1.03) saturate(0.96);
     }
 
+    #camera{
+      z-index:2;
+    }
+
     #freezeCanvas{
       display:none;
       z-index:3;
-    }
-
-    #camera{
-      z-index:2;
     }
 
     #analysisCanvas{
@@ -81,7 +81,7 @@
       font-size:12px;
       backdrop-filter: blur(6px);
       line-height:1.5;
-      max-width:70vw;
+      max-width:72vw;
       white-space:pre-line;
     }
 
@@ -111,7 +111,7 @@
       border-top:2px solid var(--accent);
       transition:transform 0.28s ease;
       backdrop-filter: blur(8px);
-      max-height:58vh;
+      max-height:60vh;
       overflow:auto;
     }
 
@@ -215,6 +215,36 @@
       opacity:0.85;
     }
 
+    #playbackPanel{
+      position:fixed;
+      left:10px;
+      right:10px;
+      bottom:10px;
+      z-index:26;
+      background:rgba(0,0,0,0.75);
+      border:1px solid #2d2d2d;
+      border-radius:12px;
+      padding:10px;
+      display:none;
+      backdrop-filter: blur(8px);
+    }
+
+    #playbackVideo{
+      width:100%;
+      max-height:32vh;
+      background:#000;
+      border-radius:10px;
+    }
+
+    .playback-top{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:8px;
+      font-size:13px;
+    }
+
     @media (max-width: 820px){
       .btns{
         grid-template-columns: repeat(2, 1fr);
@@ -238,6 +268,14 @@
     <video id="camera" autoplay playsinline muted></video>
     <canvas id="freezeCanvas"></canvas>
     <canvas id="analysisCanvas"></canvas>
+  </div>
+
+  <div id="playbackPanel">
+    <div class="playback-top">
+      <div>Recorded video preview</div>
+      <button class="secondary" id="closePlaybackBtn">Close Preview</button>
+    </div>
+    <video id="playbackVideo" controls playsinline></video>
   </div>
 
   <div id="controls">
@@ -309,7 +347,9 @@
 
       <button class="action" id="recordBtn">Start Record</button>
       <button class="danger" id="stopRecordBtn">Stop Record</button>
+      <button class="secondary" id="playRecordedBtn">Play Recording</button>
       <button class="secondary" id="downloadBtn">Download</button>
+
       <button class="warn" id="resetBtn">Reset</button>
     </div>
   </div>
@@ -324,6 +364,8 @@
     const controls = document.getElementById('controls');
     const toggleBtn = document.getElementById('toggleBtn');
     const meterBar = document.getElementById('meterBar');
+    const playbackPanel = document.getElementById('playbackPanel');
+    const playbackVideo = document.getElementById('playbackVideo');
 
     const els = {
       preset: document.getElementById('preset'),
@@ -348,8 +390,10 @@
       snapshotBtn: document.getElementById('snapshotBtn'),
       recordBtn: document.getElementById('recordBtn'),
       stopRecordBtn: document.getElementById('stopRecordBtn'),
+      playRecordedBtn: document.getElementById('playRecordedBtn'),
       downloadBtn: document.getElementById('downloadBtn'),
-      resetBtn: document.getElementById('resetBtn')
+      resetBtn: document.getElementById('resetBtn'),
+      closePlaybackBtn: document.getElementById('closePlaybackBtn')
     };
 
     let stream = null;
@@ -359,9 +403,22 @@
     let recordedBlob = null;
     let analysisInterval = null;
     let autoAdjustLock = false;
+    let recordStartTime = null;
+    let recordTimer = null;
+    let playbackUrl = null;
 
     function setHUD(text) {
       hud.textContent = text;
+    }
+
+    function formatSeconds(sec) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) {
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     }
 
     function updateValueLabels() {
@@ -499,6 +556,23 @@
       return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
     }
 
+    function startRecordTimer() {
+      recordStartTime = Date.now();
+      if (recordTimer) clearInterval(recordTimer);
+
+      recordTimer = setInterval(() => {
+        const sec = Math.floor((Date.now() - recordStartTime) / 1000);
+        hud.textContent = `Recording...\nDuration: ${formatSeconds(sec)}`;
+      }, 1000);
+    }
+
+    function stopRecordTimer() {
+      if (recordTimer) {
+        clearInterval(recordTimer);
+        recordTimer = null;
+      }
+    }
+
     function startRecording() {
       if (!stream) {
         alert('Start camera first');
@@ -509,6 +583,14 @@
 
       recordedChunks = [];
       recordedBlob = null;
+
+      if (playbackUrl) {
+        URL.revokeObjectURL(playbackUrl);
+        playbackUrl = null;
+      }
+      playbackVideo.removeAttribute('src');
+      playbackVideo.load();
+      playbackPanel.style.display = 'none';
 
       try {
         const mimeType = getSupportedMimeType();
@@ -523,10 +605,17 @@
         recorder.onstop = () => {
           const type = recorder.mimeType || 'video/webm';
           recordedBlob = new Blob(recordedChunks, { type });
+
+          playbackUrl = URL.createObjectURL(recordedBlob);
+          playbackVideo.src = playbackUrl;
+          playbackPanel.style.display = 'block';
+
+          stopRecordTimer();
           setHUD(`Recording complete\nSize: ${(recordedBlob.size / 1024 / 1024).toFixed(2)} MB`);
         };
 
         recorder.start(1000);
+        startRecordTimer();
         setHUD('Recording started');
       } catch (err) {
         console.error(err);
@@ -538,6 +627,32 @@
       if (recorder && recorder.state === 'recording') {
         recorder.stop();
       }
+    }
+
+    async function playRecordingFullscreen() {
+      if (!recordedBlob) {
+        alert('No recording available');
+        return;
+      }
+
+      playbackPanel.style.display = 'block';
+
+      try {
+        if (!document.fullscreenElement) {
+          await playbackVideo.requestFullscreen();
+        } else {
+          await playbackVideo.requestFullscreen();
+        }
+      } catch (e) {}
+
+      try {
+        await playbackVideo.play();
+      } catch (e) {}
+    }
+
+    function closePlayback() {
+      playbackVideo.pause();
+      playbackPanel.style.display = 'none';
     }
 
     function downloadRecording() {
@@ -581,8 +696,8 @@
         if (lum > 245) hotPixels++;
       }
 
-      const avg = total / pixelCount;         // 0 - 255
-      const hotRatio = hotPixels / pixelCount; // 0 - 1
+      const avg = total / pixelCount;
+      const hotRatio = hotPixels / pixelCount;
       const percent = Math.max(0, Math.min(100, (avg / 255) * 100));
 
       meterBar.style.width = percent + '%';
@@ -591,9 +706,11 @@
         autoAdjustLight(avg, hotRatio);
       }
 
-      const glareText = hotRatio > 0.04 ? ' | glare: high' : hotRatio > 0.015 ? ' | glare: medium' : ' | glare: low';
-      const recText = recorder && recorder.state === 'recording' ? '\nRecording...' : '';
-      hud.textContent = `Live: ${video.videoWidth}×${video.videoHeight}\nBrightness: ${avg.toFixed(0)}/255${glareText}${recText}`;
+      const glareText = hotRatio > 0.04 ? 'high' : hotRatio > 0.015 ? 'medium' : 'low';
+
+      if (!(recorder && recorder.state === 'recording')) {
+        hud.textContent = `Live: ${video.videoWidth}×${video.videoHeight}\nBrightness: ${avg.toFixed(0)}/255 | glare: ${glareText}`;
+      }
     }
 
     function autoAdjustLight(avg, hotRatio) {
@@ -644,8 +761,10 @@
     els.snapshotBtn.addEventListener('click', freezeFrame);
     els.recordBtn.addEventListener('click', startRecording);
     els.stopRecordBtn.addEventListener('click', stopRecording);
+    els.playRecordedBtn.addEventListener('click', playRecordingFullscreen);
     els.downloadBtn.addEventListener('click', downloadRecording);
     els.resetBtn.addEventListener('click', resetControls);
+    els.closePlaybackBtn.addEventListener('click', closePlayback);
 
     els.freeze.addEventListener('change', () => {
       if (els.freeze.checked) freezeFrame();
@@ -665,6 +784,16 @@
     });
 
     document.addEventListener('fullscreenchange', async () => {
+      const isFs = !!document.fullscreenElement;
+
+      if (isFs) {
+        toggleBtn.style.display = 'none';
+        controls.classList.add('hidden');
+        playbackPanel.style.display = 'none';
+      } else {
+        toggleBtn.style.display = 'block';
+      }
+
       if (!document.fullscreenElement && wakeLock) {
         try { await wakeLock.release(); } catch (e) {}
         wakeLock = null;
