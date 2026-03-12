@@ -3,282 +3,225 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Validation Tool - Mobile Optimized</title>
+  <title>Live Relay Validation Tool</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     body, html {
       margin: 0; padding: 0; width: 100%; height: 100%;
       background: #000; color: #fff; font-family: Arial, sans-serif;
-      overflow: hidden; touch-action: none; /* Prevents pull-to-refresh on mobile */
+      overflow: hidden; touch-action: none;
     }
 
-    #viewer {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; justify-content: center; align-items: center;
-      z-index: 1; background: #000;
-    }
+    /* Common */
+    .hidden { display: none !important; }
+    button { padding: 15px; border-radius: 8px; border: none; font-weight: bold; font-size: 16px; color: #fff; cursor: pointer; }
+    .btn-blue { background: #1f6feb; }
+    .btn-green { background: #238636; }
+    .btn-red { background: #f85149; }
 
-    video {
-      position: absolute; width: 100%; height: 100%; object-fit: contain;
-      transform-origin: center center;
-      transition: transform 0.1s ease, filter 0.1s ease;
+    /* Main Menu */
+    #mainMenu {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; gap: 20px; padding: 20px; text-align: center;
     }
+    .menu-box { background: #111; padding: 30px; border-radius: 12px; border: 1px solid #30363d; max-width: 400px;}
 
-    /* Color Temp Overlay */
-    #tempOverlay {
-      position: absolute; inset: 0; pointer-events: none; z-index: 10; mix-blend-mode: overlay;
-    }
+    /* Camera Sender UI (Phone 1) */
+    #senderUI { display: flex; flex-direction: column; height: 100vh; }
+    #senderVideo { flex: 1; width: 100%; background: #000; object-fit: cover; }
+    .sender-controls { padding: 20px; background: #111; display: flex; gap: 10px; align-items: center;}
+    input.pin-input { padding: 15px; font-size: 18px; width: 150px; text-align: center; border-radius: 8px; border: 1px solid #58a6ff; background: #000; color: #fff; }
 
-    /* Target Guide */
-    #ghostTarget {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 220px; height: 300px; border: 3px dashed rgba(255, 255, 255, 0.6);
-      border-radius: 50%; pointer-events: none; z-index: 20; display: none;
-    }
+    /* Display Receiver UI (Phone 2) */
+    #receiverUI { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    #receiverVideo { position: absolute; width: 100%; height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease, filter 0.1s ease; }
+    
+    #tempOverlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; mix-blend-mode: overlay; }
+    #ghostTarget { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; height: 300px; border: 3px dashed rgba(255, 255, 255, 0.6); border-radius: 50%; pointer-events: none; z-index: 20; display: none; }
     #ghostTarget.active { display: block; }
 
-    #hud {
-      position: fixed; top: 15px; left: 15px; z-index: 30;
-      padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.6);
-      font-size: 14px; backdrop-filter: blur(5px);
-    }
+    #hud { position: fixed; top: 15px; left: 15px; z-index: 30; padding: 15px; border-radius: 8px; background: rgba(0,0,0,0.8); font-size: 16px; border: 1px solid #3fb950; color: #3fb950;}
 
-    #toggleBtn {
-      position: fixed; top: 15px; right: 15px; z-index: 50;
-      width: 45px; height: 45px; border: none; border-radius: 50%;
-      background: rgba(255,255,255,0.2); color: #fff; font-size: 24px; cursor: pointer;
-    }
+    #toggleBtn { position: fixed; top: 15px; right: 15px; z-index: 50; width: 45px; height: 45px; border: none; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; font-size: 24px; cursor: pointer; }
 
-    /* Scrollable Mobile Controls */
     #controls {
-      position: fixed; bottom: 0; left: 0; width: 100%;
-      max-height: 55vh; overflow-y: auto; background: rgba(15, 15, 15, 0.95);
-      z-index: 40; padding: 15px; padding-bottom: 30px; box-sizing: border-box;
-      border-top: 2px solid #58a6ff; transition: transform 0.3s ease;
+      position: fixed; bottom: 0; left: 0; width: 100%; max-height: 60vh; overflow-y: auto; background: rgba(15, 15, 15, 0.95);
+      z-index: 40; padding: 20px; box-sizing: border-box; border-top: 2px solid #58a6ff; transition: transform 0.3s ease;
     }
     #controls.hidden { transform: translateY(100%); }
 
-    /* Checkbox Grid for Mobile */
-    .toggles-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
-      background: #222; padding: 15px; border-radius: 8px; margin-bottom: 15px;
-    }
+    /* Grid & Sliders */
+    .toggles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #222; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
     .toggles-grid label { display: flex; align-items: center; gap: 8px; font-size: 15px; }
     .toggles-grid input[type="checkbox"] { width: 18px; height: 18px; }
-
-    /* Sliders */
     .slider-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
     .slider-group label { width: 90px; font-size: 14px; }
     .slider-group input[type="range"] { flex: 1; height: 6px; }
     .slider-group .val { width: 40px; text-align: right; font-size: 12px; }
 
-    /* Buttons */
-    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    button { padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; color: #fff; cursor: pointer; }
-    .btn-blue { background: #1f6feb; }
-    .btn-red { background: #f85149; }
-    .btn-gray { background: #30363d; }
-    
-    .btn-massive { 
-      grid-column: span 2; background: #238636; font-size: 18px; 
-      padding: 16px; margin-top: 10px; border: 2px solid #2ea043;
-    }
-
-    /* Playback Video (Hides main video) */
-    #playbackVideo { z-index: 5; display: none; }
-
-    /* Stealth Presentation Mode */
-    body.stealth-mode #controls,
-    body.stealth-mode #hud,
-    body.stealth-mode #toggleBtn,
-    body.stealth-mode #ghostTarget { display: none !important; }
-    
-    body.stealth-mode #camera { display: none; }
-    body.stealth-mode #playbackVideo { display: block; }
+    /* Stealth Mode */
+    body.stealth-mode #controls, body.stealth-mode #hud, body.stealth-mode #toggleBtn, body.stealth-mode #ghostTarget { display: none !important; }
   </style>
 </head>
 <body>
 
-  <div id="hud">System Ready</div>
-  <button id="toggleBtn">⚙️</button>
-
-  <div id="viewer">
-    <video id="camera" autoplay playsinline muted></video>
-    <video id="playbackVideo" playsinline muted></video>
-    <div id="ghostTarget"></div>
-    <div id="tempOverlay"></div>
+  <div id="mainMenu">
+    <h2>Live Relay Setup</h2>
+    <div class="menu-box">
+      <h3 style="color: #3fb950;">Mobile 2 (Laptop ke samne)</h3>
+      <p>Is mobile ki screen par live feed aur zoom/pan controls dikhenge.</p>
+      <button class="btn-green" onclick="startReceiver()">I am the DISPLAY</button>
+    </div>
+    <div class="menu-box">
+      <h3 style="color: #58a6ff;">Mobile 1 (Aapke hath mein)</h3>
+      <p>Yeh mobile aapka face live capture karega.</p>
+      <button class="btn-blue" onclick="startSender()">I am the CAMERA</button>
+    </div>
   </div>
 
-  <div id="controls">
-    
-    <div class="toggles-grid">
-      <label><input type="checkbox" id="showGhost"> Show Guide</label>
-      <label><input type="checkbox" id="mirror" checked> Mirror</label>
-      <label><input type="checkbox" id="autoLight" checked> Auto Light</label>
+  <div id="senderUI" class="hidden">
+    <video id="senderVideo" autoplay playsinline muted></video>
+    <div class="sender-controls">
+      <input type="number" id="targetPin" class="pin-input" placeholder="Enter PIN">
+      <button class="btn-blue" style="flex: 1;" onclick="connectToReceiver()">Connect & Send Live</button>
     </div>
+  </div>
 
-    <div class="slider-group"><label>Zoom</label><input type="range" id="zoom" min="1" max="3" step="0.05" value="1"><div class="val" id="zoomVal">1.0</div></div>
-    <div class="slider-group"><label>Pan X</label><input type="range" id="panX" min="-300" max="300" step="5" value="0"><div class="val" id="panXVal">0</div></div>
-    <div class="slider-group"><label>Pan Y</label><input type="range" id="panY" min="-300" max="300" step="5" value="0"><div class="val" id="panYVal">0</div></div>
-    <div class="slider-group"><label>Brightness</label><input type="range" id="brightness" min="0.5" max="1.5" step="0.05" value="1.0"><div class="val" id="brightVal">1.0</div></div>
-    <div class="slider-group"><label>Contrast</label><input type="range" id="contrast" min="0.5" max="1.5" step="0.05" value="1.05"><div class="val" id="contVal">1.05</div></div>
-    <div class="slider-group"><label>Temp</label><input type="range" id="temperature" min="-50" max="50" step="1" value="0"><div class="val" id="tempVal">0</div></div>
+  <div id="receiverUI" class="hidden">
+    <div id="hud">Generating PIN...</div>
+    <button id="toggleBtn" onclick="document.getElementById('controls').classList.toggle('hidden')">⚙️</button>
 
-    <div class="btn-grid">
-      <button class="btn-blue" id="startCamBtn">1. Start Camera</button>
-      <button class="btn-gray" id="centerBtn">Center Image</button>
-      <button class="btn-blue" id="recordBtn">2. Start Record</button>
-      <button class="btn-red" id="stopBtn">3. Stop Record</button>
-      <button class="btn-massive" id="playFullBtn">▶ PLAY FULLSCREEN BYPASS</button>
+    <video id="receiverVideo" autoplay playsinline muted></video>
+    <div id="ghostTarget"></div>
+    <div id="tempOverlay"></div>
+
+    <div id="controls">
+      <div class="toggles-grid">
+        <label><input type="checkbox" id="showGhost"> Show Guide</label>
+        <label><input type="checkbox" id="mirror" checked> Mirror</label>
+      </div>
+      <div class="slider-group"><label>Zoom</label><input type="range" id="zoom" min="1" max="4" step="0.05" value="1"><div class="val" id="zVal">1.0</div></div>
+      <div class="slider-group"><label>Pan X</label><input type="range" id="panX" min="-500" max="500" step="5" value="0"><div class="val" id="pxVal">0</div></div>
+      <div class="slider-group"><label>Pan Y</label><input type="range" id="panY" min="-500" max="500" step="5" value="0"><div class="val" id="pyVal">0</div></div>
+      <div class="slider-group"><label>Brightness</label><input type="range" id="brightness" min="0.5" max="1.5" step="0.05" value="1.0"><div class="val" id="bVal">1.0</div></div>
+      <div class="slider-group"><label>Contrast</label><input type="range" id="contrast" min="0.5" max="1.5" step="0.05" value="1.05"><div class="val" id="cVal">1.05</div></div>
+      <div class="slider-group"><label>Temp</label><input type="range" id="temperature" min="-50" max="50" step="1" value="0"><div class="val" id="tVal">0</div></div>
+
+      <button class="btn-green" style="width: 100%; margin-top: 15px; font-size: 18px;" onclick="startPresentation()">▶ PLAY FULLSCREEN BYPASS</button>
+      <button class="btn-blue" style="width: 100%; margin-top: 10px;" onclick="centerVideo()">Center Image</button>
     </div>
   </div>
 
   <script>
-    const camera = document.getElementById('camera');
-    const playbackVideo = document.getElementById('playbackVideo');
-    const ghostTarget = document.getElementById('ghostTarget');
-    const tempOverlay = document.getElementById('tempOverlay');
-    const controls = document.getElementById('controls');
-    const hud = document.getElementById('hud');
-    
-    // Inputs
-    const showGhost = document.getElementById('showGhost');
-    const mirror = document.getElementById('mirror');
-    const zoom = document.getElementById('zoom');
-    const panX = document.getElementById('panX');
-    const panY = document.getElementById('panY');
-    const brightness = document.getElementById('brightness');
-    const contrast = document.getElementById('contrast');
-    const temperature = document.getElementById('temperature');
+    const PREFIX = "vijeet-live-";
+    let myPeer = null;
+    let localStream = null;
 
-    let stream = null;
-    let recorder = null;
-    let recordedChunks = [];
-    let recordStartTime = 0;
-    let exactDuration = 0; // Fix for mobile webm duration bug
-    let pingPongInterval;
-    let isReversing = false;
+    // --- RECEIVER LOGIC (DISPLAY PHONE) ---
+    function startReceiver() {
+      document.getElementById('mainMenu').classList.add('hidden');
+      document.getElementById('receiverUI').classList.remove('hidden');
 
-    // View Update Logic
+      // Generate Random 4-digit PIN
+      const myPin = Math.floor(1000 + Math.random() * 9000);
+      myPeer = new Peer(PREFIX + myPin);
+
+      myPeer.on('open', (id) => {
+        document.getElementById('hud').innerHTML = `PIN: <b style="font-size:24px; color:#fff;">${myPin}</b><br><small>Enter this in Mobile 1</small>`;
+      });
+
+      myPeer.on('call', (call) => {
+        call.answer(); // Answer without sending a stream back
+        call.on('stream', (remoteStream) => {
+          document.getElementById('receiverVideo').srcObject = remoteStream;
+          document.getElementById('hud').innerText = "LIVE CONNECTED";
+          setTimeout(() => document.getElementById('hud').classList.add('hidden'), 3000); // Hide HUD after connection
+        });
+      });
+
+      myPeer.on('error', (err) => alert("Error: " + err.message));
+      setupControls();
+    }
+
+    // --- SENDER LOGIC (CAMERA PHONE) ---
+    async function startSender() {
+      document.getElementById('mainMenu').classList.add('hidden');
+      document.getElementById('senderUI').classList.remove('hidden');
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
+        document.getElementById('senderVideo').srcObject = localStream;
+        myPeer = new Peer(); // Auto ID for sender
+      } catch (err) { alert("Camera Error: " + err.message); }
+    }
+
+    function connectToReceiver() {
+      const pin = document.getElementById('targetPin').value;
+      if (pin.length < 4) return alert("Enter valid 4-digit PIN");
+
+      const call = myPeer.call(PREFIX + pin, localStream);
+      call.on('stream', () => { /* Receiver doesnt send stream back */ });
+      
+      // Update Sender UI
+      document.querySelector('.sender-controls').innerHTML = `<h3 style="color:#3fb950; margin:0 auto;">STREAMING LIVE...</h3>`;
+    }
+
+    // --- UI & CONTROLS (RECEIVER) ---
+    function setupControls() {
+      const elements = ['zoom', 'panX', 'panY', 'brightness', 'contrast', 'temperature', 'mirror', 'showGhost'];
+      elements.forEach(id => document.getElementById(id).addEventListener('input', updateView));
+      updateView();
+    }
+
     function updateView() {
-      const transform = `translate(${panX.value}px, ${panY.value}px) scaleX(${mirror.checked ? -1 : 1}) scale(${zoom.value})`;
-      const filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
+      const mirror = document.getElementById('mirror').checked;
+      const zoom = document.getElementById('zoom').value;
+      const panX = document.getElementById('panX').value;
+      const panY = document.getElementById('panY').value;
+      const bright = document.getElementById('brightness').value;
+      const cont = document.getElementById('contrast').value;
+      const temp = Number(document.getElementById('temperature').value);
 
-      camera.style.transform = transform;
-      camera.style.filter = filter;
-      playbackVideo.style.transform = transform;
-      playbackVideo.style.filter = filter;
+      const video = document.getElementById('receiverVideo');
+      video.style.transform = `translate(${panX}px, ${panY}px) scaleX(${mirror ? -1 : 1}) scale(${zoom})`;
+      video.style.filter = `brightness(${bright}) contrast(${cont})`;
 
-      // Color Temp
-      let temp = Number(temperature.value);
+      const tempOverlay = document.getElementById('tempOverlay');
       if (temp > 0) tempOverlay.style.background = `rgba(255, 140, 0, ${temp / 150})`;
       else if (temp < 0) tempOverlay.style.background = `rgba(0, 130, 255, ${Math.abs(temp) / 150})`;
       else tempOverlay.style.background = 'transparent';
 
-      // Ghost Target
-      ghostTarget.className = showGhost.checked ? 'active' : '';
+      document.getElementById('ghostTarget').className = document.getElementById('showGhost').checked ? 'active' : '';
 
-      // Labels
-      document.getElementById('zoomVal').innerText = zoom.value;
-      document.getElementById('panXVal').innerText = panX.value;
-      document.getElementById('panYVal').innerText = panY.value;
-      document.getElementById('brightVal').innerText = brightness.value;
-      document.getElementById('contVal').innerText = contrast.value;
-      document.getElementById('tempVal').innerText = temperature.value;
+      document.getElementById('zVal').innerText = zoom;
+      document.getElementById('pxVal').innerText = panX;
+      document.getElementById('pyVal').innerText = panY;
+      document.getElementById('bVal').innerText = bright;
+      document.getElementById('cVal').innerText = cont;
+      document.getElementById('tVal').innerText = temp;
     }
 
-    [zoom, panX, panY, brightness, contrast, temperature, mirror, showGhost].forEach(el => el.addEventListener('input', updateView));
-
-    // Buttons
-    document.getElementById('toggleBtn').addEventListener('click', () => controls.classList.toggle('hidden'));
-    
-    document.getElementById('centerBtn').addEventListener('click', () => {
-      panX.value = 0; panY.value = 0; updateView();
-    });
-
-    // Camera Start
-    document.getElementById('startCamBtn').addEventListener('click', async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } });
-        camera.srcObject = stream;
-        hud.innerText = "Camera Active - Adjust Guide";
-        playbackVideo.style.display = 'none';
-        camera.style.display = 'block';
-      } catch (e) { hud.innerText = "Camera Error"; }
-    });
-
-    // Record Start
-    document.getElementById('recordBtn').addEventListener('click', () => {
-      if (!stream) return alert('Start camera first!');
-      recordedChunks = [];
-      recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      
-      recorder.onstop = () => {
-        exactDuration = (Date.now() - recordStartTime) / 1000; // Exact length
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        playbackVideo.src = URL.createObjectURL(blob);
-        hud.innerText = `Saved (${exactDuration.toFixed(1)}s). Ready for bypass.`;
-      };
-      
-      recorder.start();
-      recordStartTime = Date.now();
-      hud.innerText = "🔴 RECORDING... Look at camera naturally";
-    });
-
-    // Record Stop
-    document.getElementById('stopBtn').addEventListener('click', () => {
-      if (recorder && recorder.state === "recording") recorder.stop();
-    });
-
-    // Custom Ping Pong Loop (Works perfectly on Mobile)
-    function checkPingPong() {
-        if (!isReversing && playbackVideo.currentTime >= (exactDuration - 0.2)) {
-            isReversing = true;
-            playbackVideo.pause();
-            pingPongInterval = setInterval(() => {
-                playbackVideo.currentTime -= 0.05;
-                if (playbackVideo.currentTime <= 0.1) {
-                    clearInterval(pingPongInterval);
-                    isReversing = false;
-                    playbackVideo.play();
-                }
-            }, 50);
-        }
+    function centerVideo() {
+      document.getElementById('panX').value = 0; document.getElementById('panY').value = 0; updateView();
     }
 
-    // Play Fullscreen Bypass
-    document.getElementById('playFullBtn').addEventListener('click', async () => {
-      if (!playbackVideo.src) return alert("Record a video first!");
-      
-      // Enter Stealth Mode
+    async function startPresentation() {
       document.body.classList.add('stealth-mode');
+      const video = document.getElementById('receiverVideo');
       
-      // Request Fullscreen
       if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
+        try { await document.documentElement.requestFullscreen(); } catch (e) {}
       }
-      
-      // Start Video
-      isReversing = false;
-      playbackVideo.currentTime = 0;
-      playbackVideo.loop = false; // We handle loop manually
-      playbackVideo.addEventListener('timeupdate', checkPingPong);
-      await playbackVideo.play();
+      try { await video.play(); } catch(e) {} // Ensure it's playing
 
-      // Double tap to exit
-      document.body.addEventListener('dblclick', exitStealthMode);
-    });
+      document.body.addEventListener('dblclick', exitPresentation);
+    }
 
-    function exitStealthMode() {
+    function exitPresentation() {
       document.body.classList.remove('stealth-mode');
       if (document.fullscreenElement) document.exitFullscreen();
-      playbackVideo.pause();
-      clearInterval(pingPongInterval);
-      playbackVideo.removeEventListener('timeupdate', checkPingPong);
-      document.body.removeEventListener('dblclick', exitStealthMode);
+      document.body.removeEventListener('dblclick', exitPresentation);
     }
-
-    updateView();
   </script>
 </body>
 </html>
