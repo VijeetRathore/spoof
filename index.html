@@ -3,430 +3,236 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Preview + Recording + Playback</title>
+  <title>Validation Tool - Mobile Optimized</title>
   <style>
-    :root{
-      --panel-bg: rgba(18,18,18,0.94);
-      --accent: #58a6ff;
-      --text: #ffffff;
+    body, html {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #000; color: #fff; font-family: Arial, sans-serif;
+      overflow: hidden; touch-action: none; /* Prevents pull-to-refresh on mobile */
     }
 
-    * { box-sizing: border-box; }
-
-    body{
-      margin:0;
-      background:#000;
-      color:var(--text);
-      font-family:Arial, sans-serif;
-      overflow:hidden;
+    #viewer {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1; background: #000;
     }
 
-    #viewer{
-      position:relative;
-      width:100vw;
-      height:100vh;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      overflow:hidden;
-      background:#000;
+    video {
+      position: absolute; width: 100%; height: 100%; object-fit: contain;
+      transform-origin: center center;
+      transition: transform 0.1s ease, filter 0.1s ease;
     }
 
-    video, canvas{
-      position:absolute;
-      max-width:100%;
-      max-height:100%;
-      object-fit:contain;
-      transform-origin:center center;
-      backface-visibility:hidden;
-      will-change:transform, filter;
-      transition:transform 0.18s ease, filter 0.18s ease;
-      filter: brightness(0.92) contrast(1.03) saturate(0.96);
-    }
-
-    #camera{ z-index:2; }
-    #freezeCanvas{ display:none; z-index:3; }
-    #analysisCanvas{ display:none; }
-
-    /* Color Temperature Overlay */
+    /* Color Temp Overlay */
     #tempOverlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 10;
-      mix-blend-mode: overlay;
-      transition: background 0.2s ease;
+      position: absolute; inset: 0; pointer-events: none; z-index: 10; mix-blend-mode: overlay;
     }
 
-    /* Ghost Target Oval */
+    /* Target Guide */
     #ghostTarget {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 200px;
-      height: 280px;
-      border: 3px dashed rgba(255, 255, 255, 0.4);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 20;
-      display: none;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 220px; height: 300px; border: 3px dashed rgba(255, 255, 255, 0.6);
+      border-radius: 50%; pointer-events: none; z-index: 20; display: none;
     }
     #ghostTarget.active { display: block; }
 
-    #hud{
-      position:fixed;
-      top:10px;
-      left:10px;
-      z-index:30;
-      padding:8px 10px;
-      border-radius:10px;
-      background:rgba(0,0,0,0.45);
-      font-size:12px;
-      backdrop-filter: blur(6px);
-      line-height:1.5;
-      max-width:72vw;
-      white-space:pre-line;
+    #hud {
+      position: fixed; top: 15px; left: 15px; z-index: 30;
+      padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.6);
+      font-size: 14px; backdrop-filter: blur(5px);
     }
 
-    #toggleBtn{
-      position:fixed;
-      top:10px;
-      right:10px;
-      z-index:40;
-      width:42px;
-      height:42px;
-      border:none;
-      border-radius:50%;
-      background:rgba(255,255,255,0.16);
-      color:#fff;
-      font-size:20px;
-      cursor:pointer;
+    #toggleBtn {
+      position: fixed; top: 15px; right: 15px; z-index: 50;
+      width: 45px; height: 45px; border: none; border-radius: 50%;
+      background: rgba(255,255,255,0.2); color: #fff; font-size: 24px; cursor: pointer;
     }
 
-    #controls{
-      position:fixed;
-      left:0;
-      bottom:0;
-      width:100%;
-      z-index:35;
-      padding:14px;
-      background:var(--panel-bg);
-      border-top:2px solid var(--accent);
-      transition:transform 0.28s ease;
-      backdrop-filter: blur(8px);
-      max-height:60vh;
-      overflow:auto;
+    /* Scrollable Mobile Controls */
+    #controls {
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      max-height: 55vh; overflow-y: auto; background: rgba(15, 15, 15, 0.95);
+      z-index: 40; padding: 15px; padding-bottom: 30px; box-sizing: border-box;
+      border-top: 2px solid #58a6ff; transition: transform 0.3s ease;
+    }
+    #controls.hidden { transform: translateY(100%); }
+
+    /* Checkbox Grid for Mobile */
+    .toggles-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+      background: #222; padding: 15px; border-radius: 8px; margin-bottom: 15px;
+    }
+    .toggles-grid label { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+    .toggles-grid input[type="checkbox"] { width: 18px; height: 18px; }
+
+    /* Sliders */
+    .slider-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .slider-group label { width: 90px; font-size: 14px; }
+    .slider-group input[type="range"] { flex: 1; height: 6px; }
+    .slider-group .val { width: 40px; text-align: right; font-size: 12px; }
+
+    /* Buttons */
+    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+    button { padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; color: #fff; cursor: pointer; }
+    .btn-blue { background: #1f6feb; }
+    .btn-red { background: #f85149; }
+    .btn-gray { background: #30363d; }
+    
+    .btn-massive { 
+      grid-column: span 2; background: #238636; font-size: 18px; 
+      padding: 16px; margin-top: 10px; border: 2px solid #2ea043;
     }
 
-    #controls.hidden{ transform:translateY(100%); }
+    /* Playback Video (Hides main video) */
+    #playbackVideo { z-index: 5; display: none; }
 
-    .row{ display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-    .group{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-    label{ width:110px; flex:0 0 110px; font-size:14px; }
-    input[type="range"]{ flex:1; }
-
-    select, button{
-      padding:10px 12px;
-      border-radius:10px;
-      border:none;
-      font-weight:bold;
-    }
-
-    select{ background:#111; color:#fff; border:1px solid #333; }
-    button.action{ background:#1f6feb; color:#fff; cursor:pointer; }
-    button.secondary{ background:#30363d; color:#fff; cursor:pointer; }
-    button.warn{ background:#d29922; color:#111; cursor:pointer; }
-    button.danger{ background:#f85149; color:#fff; cursor:pointer; }
-    button.stealth{ background:#8957e5; color:#fff; cursor:pointer; grid-column: span 4; margin-top: 5px;}
-
-    .value{ width:60px; text-align:right; font-size:12px; opacity:0.9; }
-
-    .btns{
-      display:grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap:10px;
-      margin-top:8px;
-    }
-
-    #meterWrap{ height:10px; background:#222; border-radius:999px; overflow:hidden; margin-top:8px; }
-    #meterBar{ height:100%; width:0%; background:#58a6ff; transition:width 0.18s ease; }
-    .small{ font-size:12px; opacity:0.85; }
-
-    #playbackPanel{
-      position:fixed; left:10px; right:10px; bottom:10px; z-index:60;
-      background:rgba(0,0,0,0.82); border:1px solid #2d2d2d;
-      border-radius:12px; padding:10px; display:none; backdrop-filter: blur(8px);
-    }
-
-    #playbackVideo{
-      width:100%; max-height:32vh; background:#000; border-radius:10px; z-index:70; display:block;
-    }
-
-    .playback-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
-
-    /* Presentation Mode Classes */
-    body.presentation-mode #controls,
-    body.presentation-mode #hud,
-    body.presentation-mode #toggleBtn,
-    body.presentation-mode .playback-top {
-        display: none !important;
-    }
-    body.presentation-mode #playbackPanel {
-        border: none; background: transparent; padding: 0;
-        left: 0; right: 0; bottom: 0; top: 0; border-radius: 0;
-    }
-    body.presentation-mode #playbackVideo {
-        max-height: 100vh; height: 100vh; width: 100vw; object-fit: contain; border-radius: 0; pointer-events: none;
-    }
-
-    @media (max-width: 820px){
-      .btns{ grid-template-columns: repeat(2, 1fr); }
-      label{ width:86px; flex-basis:86px; }
-      #hud{ max-width:80vw; }
-      button.stealth { grid-column: span 2; }
-    }
+    /* Stealth Presentation Mode */
+    body.stealth-mode #controls,
+    body.stealth-mode #hud,
+    body.stealth-mode #toggleBtn,
+    body.stealth-mode #ghostTarget { display: none !important; }
+    
+    body.stealth-mode #camera { display: none; }
+    body.stealth-mode #playbackVideo { display: block; }
   </style>
 </head>
 <body>
 
   <div id="hud">System Ready</div>
-  <button id="toggleBtn" title="Toggle controls">⚙️</button>
+  <button id="toggleBtn">⚙️</button>
 
   <div id="viewer">
     <video id="camera" autoplay playsinline muted></video>
-    <canvas id="freezeCanvas"></canvas>
-    <canvas id="analysisCanvas"></canvas>
+    <video id="playbackVideo" playsinline muted></video>
     <div id="ghostTarget"></div>
     <div id="tempOverlay"></div>
   </div>
 
-  <div id="playbackPanel">
-    <div class="playback-top">
-      <div>Validation Preview</div>
-      <button class="secondary" id="closePlaybackBtn">Close Preview</button>
-    </div>
-    <video id="playbackVideo" playsinline muted></video>
-  </div>
-
   <div id="controls">
-    <div class="row">
-      <select id="preset">
-        <option value="balanced">Balanced</option>
-        <option value="lowglare">Low Glare</option>
-        <option value="soft">Soft</option>
-        <option value="bright">Bright</option>
-      </select>
-      <label style="width:auto; flex:0 0 auto;"><input type="checkbox" id="mirror" checked> Mirror</label>
-      <label style="width:auto; flex:0 0 auto;"><input type="checkbox" id="freeze"> Freeze</label>
-      <label style="width:auto; flex:0 0 auto;"><input type="checkbox" id="autoLight" checked> Auto Light</label>
-      <label style="width:auto; flex:0 0 auto;"><input type="checkbox" id="showGhost"> Show Guide</label>
+    
+    <div class="toggles-grid">
+      <label><input type="checkbox" id="showGhost"> Show Guide</label>
+      <label><input type="checkbox" id="mirror" checked> Mirror</label>
+      <label><input type="checkbox" id="autoLight" checked> Auto Light</label>
     </div>
 
-    <div class="group">
-      <label>Zoom</label>
-      <input type="range" id="zoom" min="1" max="3" step="0.01" value="1">
-      <div class="value" id="zoomVal">1.00</div>
-    </div>
-    <div class="group">
-      <label>Pan X</label>
-      <input type="range" id="panX" min="-300" max="300" step="1" value="0">
-      <div class="value" id="panXVal">0</div>
-    </div>
-    <div class="group">
-      <label>Pan Y</label>
-      <input type="range" id="panY" min="-300" max="300" step="1" value="0">
-      <div class="value" id="panYVal">0</div>
-    </div>
-    <div class="group">
-      <label>Brightness</label>
-      <input type="range" id="brightness" min="0.75" max="1.15" step="0.01" value="0.92">
-      <div class="value" id="brightnessVal">0.92</div>
-    </div>
-    <div class="group">
-      <label>Contrast</label>
-      <input type="range" id="contrast" min="0.95" max="1.12" step="0.01" value="1.03">
-      <div class="value" id="contrastVal">1.03</div>
-    </div>
-    <div class="group">
-      <label>Temp (Warm)</label>
-      <input type="range" id="temperature" min="-50" max="50" step="1" value="0">
-      <div class="value" id="tempVal">0</div>
-    </div>
+    <div class="slider-group"><label>Zoom</label><input type="range" id="zoom" min="1" max="3" step="0.05" value="1"><div class="val" id="zoomVal">1.0</div></div>
+    <div class="slider-group"><label>Pan X</label><input type="range" id="panX" min="-300" max="300" step="5" value="0"><div class="val" id="panXVal">0</div></div>
+    <div class="slider-group"><label>Pan Y</label><input type="range" id="panY" min="-300" max="300" step="5" value="0"><div class="val" id="panYVal">0</div></div>
+    <div class="slider-group"><label>Brightness</label><input type="range" id="brightness" min="0.5" max="1.5" step="0.05" value="1.0"><div class="val" id="brightVal">1.0</div></div>
+    <div class="slider-group"><label>Contrast</label><input type="range" id="contrast" min="0.5" max="1.5" step="0.05" value="1.05"><div class="val" id="contVal">1.05</div></div>
+    <div class="slider-group"><label>Temp</label><input type="range" id="temperature" min="-50" max="50" step="1" value="0"><div class="val" id="tempVal">0</div></div>
 
-    <div class="small">Brightness meter</div>
-    <div id="meterWrap"><div id="meterBar"></div></div>
-
-    <div class="btns">
-      <button class="action" id="startBtn">Start Camera</button>
-      <button class="action" id="fullscreenBtn">Fullscreen</button>
-      <button class="secondary" id="centerBtn">Center</button>
-      <button class="secondary" id="snapshotBtn">Freeze Now</button>
-      <button class="action" id="recordBtn">Start Record</button>
-      <button class="danger" id="stopRecordBtn">Stop Record</button>
-      <button class="secondary" id="playRecordedBtn">Play Recording</button>
-      <button class="warn" id="resetBtn">Reset</button>
-      
-      <button class="stealth" id="presentationBtn">Start Presentation (Double Tap to Exit)</button>
+    <div class="btn-grid">
+      <button class="btn-blue" id="startCamBtn">1. Start Camera</button>
+      <button class="btn-gray" id="centerBtn">Center Image</button>
+      <button class="btn-blue" id="recordBtn">2. Start Record</button>
+      <button class="btn-red" id="stopBtn">3. Stop Record</button>
+      <button class="btn-massive" id="playFullBtn">▶ PLAY FULLSCREEN BYPASS</button>
     </div>
   </div>
 
   <script>
-    const video = document.getElementById('camera');
-    const freezeCanvas = document.getElementById('freezeCanvas');
-    const freezeCtx = freezeCanvas.getContext('2d');
-    const analysisCanvas = document.getElementById('analysisCanvas');
-    const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true });
-    const hud = document.getElementById('hud');
-    const controls = document.getElementById('controls');
-    const toggleBtn = document.getElementById('toggleBtn');
-    const meterBar = document.getElementById('meterBar');
-    const playbackPanel = document.getElementById('playbackPanel');
+    const camera = document.getElementById('camera');
     const playbackVideo = document.getElementById('playbackVideo');
-    
-    // New Elements
     const ghostTarget = document.getElementById('ghostTarget');
     const tempOverlay = document.getElementById('tempOverlay');
-
-    const els = {
-      preset: document.getElementById('preset'),
-      mirror: document.getElementById('mirror'),
-      freeze: document.getElementById('freeze'),
-      autoLight: document.getElementById('autoLight'),
-      showGhost: document.getElementById('showGhost'),
-      zoom: document.getElementById('zoom'),
-      panX: document.getElementById('panX'),
-      panY: document.getElementById('panY'),
-      brightness: document.getElementById('brightness'),
-      contrast: document.getElementById('contrast'),
-      temperature: document.getElementById('temperature'),
-      zoomVal: document.getElementById('zoomVal'),
-      panXVal: document.getElementById('panXVal'),
-      panYVal: document.getElementById('panYVal'),
-      brightnessVal: document.getElementById('brightnessVal'),
-      contrastVal: document.getElementById('contrastVal'),
-      tempVal: document.getElementById('tempVal'),
-      startBtn: document.getElementById('startBtn'),
-      fullscreenBtn: document.getElementById('fullscreenBtn'),
-      centerBtn: document.getElementById('centerBtn'),
-      snapshotBtn: document.getElementById('snapshotBtn'),
-      recordBtn: document.getElementById('recordBtn'),
-      stopRecordBtn: document.getElementById('stopRecordBtn'),
-      playRecordedBtn: document.getElementById('playRecordedBtn'),
-      resetBtn: document.getElementById('resetBtn'),
-      closePlaybackBtn: document.getElementById('closePlaybackBtn'),
-      presentationBtn: document.getElementById('presentationBtn')
-    };
+    const controls = document.getElementById('controls');
+    const hud = document.getElementById('hud');
+    
+    // Inputs
+    const showGhost = document.getElementById('showGhost');
+    const mirror = document.getElementById('mirror');
+    const zoom = document.getElementById('zoom');
+    const panX = document.getElementById('panX');
+    const panY = document.getElementById('panY');
+    const brightness = document.getElementById('brightness');
+    const contrast = document.getElementById('contrast');
+    const temperature = document.getElementById('temperature');
 
     let stream = null;
-    let wakeLock = null;
     let recorder = null;
     let recordedChunks = [];
-    let recordedBlob = null;
-    let analysisInterval = null;
-    let autoAdjustLock = false;
-    let recordStartTime = null;
-    let recordTimer = null;
-    let playbackUrl = null;
-
-    function setHUD(text) { hud.textContent = text; }
-
-    function formatSeconds(sec) {
-      const m = Math.floor(sec / 60);
-      const s = sec % 60;
-      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    }
-
-    function updateValueLabels() {
-      els.zoomVal.textContent = Number(els.zoom.value).toFixed(2);
-      els.panXVal.textContent = els.panX.value;
-      els.panYVal.textContent = els.panY.value;
-      els.brightnessVal.textContent = Number(els.brightness.value).toFixed(2);
-      els.contrastVal.textContent = Number(els.contrast.value).toFixed(2);
-      els.tempVal.textContent = els.temperature.value;
-    }
-
-    function updateView() {
-      const mirror = els.mirror.checked ? -1 : 1;
-      const transform = `translate(${els.panX.value}px, ${els.panY.value}px) scaleX(${mirror}) scale(${els.zoom.value})`;
-      const filter = `brightness(${els.brightness.value}) contrast(${els.contrast.value})`;
-
-      video.style.transform = transform;
-      video.style.filter = filter;
-      freezeCanvas.style.transform = transform;
-      freezeCanvas.style.filter = filter;
-      
-      // Apply transform to playback video as well
-      playbackVideo.style.transform = transform;
-      playbackVideo.style.filter = filter;
-
-      // Color Temperature overlay logic
-      let temp = Number(els.temperature.value);
-      if (temp > 0) {
-          tempOverlay.style.background = `rgba(255, 140, 0, ${temp / 150})`; // Warm
-      } else if (temp < 0) {
-          tempOverlay.style.background = `rgba(0, 130, 255, ${Math.abs(temp) / 150})`; // Cool
-      } else {
-          tempOverlay.style.background = 'transparent';
-      }
-
-      // Ghost Target Toggle
-      if(els.showGhost.checked) {
-          ghostTarget.classList.add('active');
-      } else {
-          ghostTarget.classList.remove('active');
-      }
-
-      updateValueLabels();
-    }
-
-    function centerView() {
-      els.panX.value = 0; els.panY.value = 0;
-      updateValueLabels(); updateView();
-    }
-
-    function showLive() {
-      freezeCanvas.style.display = 'none';
-      video.style.display = 'block';
-      els.freeze.checked = false;
-      setHUD('Live Feed Active');
-    }
-
-    function freezeFrame() {
-      if (!video.videoWidth) return;
-      freezeCanvas.width = video.videoWidth; freezeCanvas.height = video.videoHeight;
-      freezeCtx.drawImage(video, 0, 0, freezeCanvas.width, freezeCanvas.height);
-      video.style.display = 'none'; freezeCanvas.style.display = 'block';
-      els.freeze.checked = true;
-      setHUD('Frame Frozen');
-    }
-
-    async function startCamera() {
-      try {
-        if (stream) stream.getTracks().forEach(track => track.stop());
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-        video.srcObject = stream;
-        await video.play();
-        showLive(); startBrightnessAnalysis();
-        setHUD('Camera Started');
-      } catch (err) { setHUD('Camera Access Failed'); }
-    }
-
-    async function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-      } else {
-        await document.exitFullscreen();
-      }
-    }
-
-    // Ping-Pong Playback Logic
+    let recordStartTime = 0;
+    let exactDuration = 0; // Fix for mobile webm duration bug
     let pingPongInterval;
     let isReversing = false;
 
-    function handlePingPong() {
-        if (!isReversing && playbackVideo.currentTime >= playbackVideo.duration - 0.1) {
+    // View Update Logic
+    function updateView() {
+      const transform = `translate(${panX.value}px, ${panY.value}px) scaleX(${mirror.checked ? -1 : 1}) scale(${zoom.value})`;
+      const filter = `brightness(${brightness.value}) contrast(${contrast.value})`;
+
+      camera.style.transform = transform;
+      camera.style.filter = filter;
+      playbackVideo.style.transform = transform;
+      playbackVideo.style.filter = filter;
+
+      // Color Temp
+      let temp = Number(temperature.value);
+      if (temp > 0) tempOverlay.style.background = `rgba(255, 140, 0, ${temp / 150})`;
+      else if (temp < 0) tempOverlay.style.background = `rgba(0, 130, 255, ${Math.abs(temp) / 150})`;
+      else tempOverlay.style.background = 'transparent';
+
+      // Ghost Target
+      ghostTarget.className = showGhost.checked ? 'active' : '';
+
+      // Labels
+      document.getElementById('zoomVal').innerText = zoom.value;
+      document.getElementById('panXVal').innerText = panX.value;
+      document.getElementById('panYVal').innerText = panY.value;
+      document.getElementById('brightVal').innerText = brightness.value;
+      document.getElementById('contVal').innerText = contrast.value;
+      document.getElementById('tempVal').innerText = temperature.value;
+    }
+
+    [zoom, panX, panY, brightness, contrast, temperature, mirror, showGhost].forEach(el => el.addEventListener('input', updateView));
+
+    // Buttons
+    document.getElementById('toggleBtn').addEventListener('click', () => controls.classList.toggle('hidden'));
+    
+    document.getElementById('centerBtn').addEventListener('click', () => {
+      panX.value = 0; panY.value = 0; updateView();
+    });
+
+    // Camera Start
+    document.getElementById('startCamBtn').addEventListener('click', async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } } });
+        camera.srcObject = stream;
+        hud.innerText = "Camera Active - Adjust Guide";
+        playbackVideo.style.display = 'none';
+        camera.style.display = 'block';
+      } catch (e) { hud.innerText = "Camera Error"; }
+    });
+
+    // Record Start
+    document.getElementById('recordBtn').addEventListener('click', () => {
+      if (!stream) return alert('Start camera first!');
+      recordedChunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      
+      recorder.onstop = () => {
+        exactDuration = (Date.now() - recordStartTime) / 1000; // Exact length
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        playbackVideo.src = URL.createObjectURL(blob);
+        hud.innerText = `Saved (${exactDuration.toFixed(1)}s). Ready for bypass.`;
+      };
+      
+      recorder.start();
+      recordStartTime = Date.now();
+      hud.innerText = "🔴 RECORDING... Look at camera naturally";
+    });
+
+    // Record Stop
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      if (recorder && recorder.state === "recording") recorder.stop();
+    });
+
+    // Custom Ping Pong Loop (Works perfectly on Mobile)
+    function checkPingPong() {
+        if (!isReversing && playbackVideo.currentTime >= (exactDuration - 0.2)) {
             isReversing = true;
             playbackVideo.pause();
             pingPongInterval = setInterval(() => {
@@ -440,104 +246,37 @@
         }
     }
 
-    function startRecording() {
-      if (!stream) return alert('Start camera first');
-      recordedChunks = [];
-      try {
-        recorder = new MediaRecorder(stream);
-        recorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-        recorder.onstop = () => {
-          recordedBlob = new Blob(recordedChunks, { type: 'video/webm' });
-          playbackUrl = URL.createObjectURL(recordedBlob);
-          playbackVideo.src = playbackUrl;
-          
-          // Setup Ping-Pong Loop
-          playbackVideo.loop = false; 
-          playbackVideo.addEventListener('timeupdate', handlePingPong);
-
-          setHUD('Recording Ready for Playback');
-        };
-        recorder.start();
-        recordStartTime = Date.now();
-        recordTimer = setInterval(() => setHUD(`Recording: ${formatSeconds(Math.floor((Date.now() - recordStartTime) / 1000))}`), 1000);
-      } catch (err) {}
-    }
-
-    function stopRecording() {
-      if (recorder && recorder.state === 'recording') {
-        recorder.stop();
-        clearInterval(recordTimer);
+    // Play Fullscreen Bypass
+    document.getElementById('playFullBtn').addEventListener('click', async () => {
+      if (!playbackVideo.src) return alert("Record a video first!");
+      
+      // Enter Stealth Mode
+      document.body.classList.add('stealth-mode');
+      
+      // Request Fullscreen
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
       }
-    }
-
-    async function playRecording() {
-      if (!recordedBlob) return alert('No recording available');
-      playbackPanel.style.display = 'block';
-      video.style.visibility = 'hidden';
-      isReversing = false; // Reset ping pong state
+      
+      // Start Video
+      isReversing = false;
       playbackVideo.currentTime = 0;
+      playbackVideo.loop = false; // We handle loop manually
+      playbackVideo.addEventListener('timeupdate', checkPingPong);
       await playbackVideo.play();
-    }
 
-    function closePlayback() {
+      // Double tap to exit
+      document.body.addEventListener('dblclick', exitStealthMode);
+    });
+
+    function exitStealthMode() {
+      document.body.classList.remove('stealth-mode');
+      if (document.fullscreenElement) document.exitFullscreen();
       playbackVideo.pause();
       clearInterval(pingPongInterval);
-      playbackPanel.style.display = 'none';
-      video.style.visibility = 'visible';
+      playbackVideo.removeEventListener('timeupdate', checkPingPong);
+      document.body.removeEventListener('dblclick', exitStealthMode);
     }
-
-    // Presentation Mode (Stealth Mode)
-    async function startPresentation() {
-        document.body.classList.add('presentation-mode');
-        if (!document.fullscreenElement) {
-            await document.documentElement.requestFullscreen();
-        }
-        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
-        
-        // Add listener to exit
-        document.body.addEventListener('dblclick', exitPresentation);
-    }
-
-    function exitPresentation() {
-        document.body.classList.remove('presentation-mode');
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        }
-        document.body.removeEventListener('dblclick', exitPresentation);
-    }
-
-    function analyzeBrightness() {
-      if (!video.videoWidth || els.freeze.checked) return;
-      analysisCanvas.width = 160; analysisCanvas.height = 120;
-      analysisCtx.drawImage(video, 0, 0, 160, 120);
-      const imageData = analysisCtx.getImageData(0, 0, 160, 120).data;
-      let total = 0;
-      for (let i = 0; i < imageData.length; i += 4) {
-        total += 0.2126 * imageData[i] + 0.7152 * imageData[i + 1] + 0.0722 * imageData[i + 2];
-      }
-      const avg = total / (160 * 120);
-      meterBar.style.width = Math.min(100, (avg / 255) * 100) + '%';
-    }
-
-    function startBrightnessAnalysis() {
-      if (analysisInterval) clearInterval(analysisInterval);
-      analysisInterval = setInterval(analyzeBrightness, 500);
-    }
-
-    toggleBtn.addEventListener('click', () => controls.classList.toggle('hidden'));
-    els.startBtn.addEventListener('click', startCamera);
-    els.fullscreenBtn.addEventListener('click', toggleFullscreen);
-    els.centerBtn.addEventListener('click', centerView);
-    els.snapshotBtn.addEventListener('click', freezeFrame);
-    els.recordBtn.addEventListener('click', startRecording);
-    els.stopRecordBtn.addEventListener('click', stopRecording);
-    els.playRecordedBtn.addEventListener('click', playRecording);
-    els.closePlaybackBtn.addEventListener('click', closePlayback);
-    els.presentationBtn.addEventListener('click', startPresentation);
-    
-    els.freeze.addEventListener('change', () => els.freeze.checked ? freezeFrame() : showLive());
-    
-    [els.zoom, els.panX, els.panY, els.brightness, els.contrast, els.temperature, els.mirror, els.showGhost].forEach(el => el.addEventListener('input', updateView));
 
     updateView();
   </script>
