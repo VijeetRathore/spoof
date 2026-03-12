@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Biometric Spoofer</title>
+    <title>Video Biometric Spoofer</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: #000; /* Pure black background to hide screen edges */
+            background-color: #000;
             overflow: hidden;
             font-family: Arial, sans-serif;
         }
 
-        /* Image Container */
-        #imageContainer {
+        #mediaContainer {
             width: 100vw;
             height: 100vh;
             display: flex;
@@ -22,15 +21,16 @@
             align-items: center;
         }
 
-        #targetImage {
+        /* Update: Img ki jagah Video tag ka style */
+        #targetVideo {
             max-width: 100%;
             max-height: 100%;
             transform: scale(1) translate(0px, 0px);
             filter: brightness(1) contrast(1.1);
             transition: transform 0.1s;
+            object-fit: contain;
         }
 
-        /* Control Panel */
         #controlPanel {
             position: fixed;
             bottom: 0;
@@ -44,17 +44,8 @@
             transition: transform 0.3s;
         }
 
-        .hidden {
-            transform: translateY(100%);
-        }
-
-        .control-group {
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
+        .hidden { transform: translateY(100%); }
+        .control-group { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
         label { font-size: 14px; width: 80px; }
         input[type="range"] { flex-grow: 1; margin: 0 10px; }
         input[type="file"] { margin-bottom: 10px; color: white; }
@@ -71,7 +62,6 @@
             margin-top: 10px;
         }
 
-        /* Toggle Button */
         #toggleBtn {
             position: fixed;
             top: 10px;
@@ -91,24 +81,24 @@
 
     <button id="toggleBtn" onclick="toggleControls()">⚙️</button>
 
-    <div id="imageContainer">
-        <img id="targetImage" src="" alt="Please upload a face image">
+    <div id="mediaContainer">
+        <video id="targetVideo" autoplay loop muted playsinline></video>
     </div>
 
     <div id="controlPanel">
-        <input type="file" id="imageUpload" accept="image/*">
+        <input type="file" id="videoUpload" accept="video/*">
         
         <div class="control-group">
             <label>Zoom</label>
-            <input type="range" id="zoom" min="0.5" max="3" step="0.05" value="1">
+            <input type="range" id="zoom" min="0.5" max="4" step="0.05" value="1">
         </div>
         <div class="control-group">
             <label>Pan X</label>
-            <input type="range" id="panX" min="-200" max="200" step="1" value="0">
+            <input type="range" id="panX" min="-300" max="300" step="1" value="0">
         </div>
         <div class="control-group">
             <label>Pan Y</label>
-            <input type="range" id="panY" min="-200" max="200" step="1" value="0">
+            <input type="range" id="panY" min="-300" max="300" step="1" value="0">
         </div>
         <div class="control-group">
             <label>Light</label>
@@ -119,55 +109,47 @@
     </div>
 
     <script>
-        const targetImage = document.getElementById('targetImage');
+        const targetVideo = document.getElementById('targetVideo');
         const controlPanel = document.getElementById('controlPanel');
         const toggleBtn = document.getElementById('toggleBtn');
 
-        // Handles Image Upload from Mobile Gallery
-        document.getElementById('imageUpload').addEventListener('change', function(e) {
+        // Update: Fast Video Loading using URL.createObjectURL
+        document.getElementById('videoUpload').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    targetImage.src = event.target.result;
-                }
-                reader.readAsDataURL(file);
+                const videoURL = URL.createObjectURL(file);
+                targetVideo.src = videoURL;
+                targetVideo.play(); // Play auto start karein
             }
         });
 
-        // Live update CSS transform based on sliders
+        // CSS transform and filter exactly like the image version
         function updateTransform() {
             const zoom = document.getElementById('zoom').value;
             const panX = document.getElementById('panX').value;
             const panY = document.getElementById('panY').value;
             const brightness = document.getElementById('brightness').value;
 
-            targetImage.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
-            targetImage.style.filter = `brightness(${brightness}) contrast(1.1)`;
+            targetVideo.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
+            targetVideo.style.filter = `brightness(${brightness}) contrast(1.1)`;
         }
 
-        // Attach listeners to all sliders
         document.querySelectorAll('input[type="range"]').forEach(slider => {
             slider.addEventListener('input', updateTransform);
         });
 
-        // Hide/Show Controls
         function toggleControls() {
             controlPanel.classList.toggle('hidden');
         }
 
-        // Enter Fullscreen and keep screen awake
         async function startSpoofAttack() {
-            // Hide UI
             controlPanel.classList.add('hidden');
             toggleBtn.style.display = 'none';
 
-            // Request Fullscreen
             if (document.documentElement.requestFullscreen) {
                 await document.documentElement.requestFullscreen();
             }
 
-            // Request Wake Lock (keeps screen from turning off)
             try {
                 if ('wakeLock' in navigator) {
                     await navigator.wakeLock.request('screen');
@@ -176,7 +158,6 @@
                 console.log('Wake lock failed', err);
             }
 
-            // Double tap anywhere to bring UI back
             document.body.addEventListener('dblclick', exitAttackMode);
         }
 
