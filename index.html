@@ -6,48 +6,52 @@
   <title>Live Relay Validation Tool</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
-    body, html {
-      margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #000; color: #fff; font-family: Arial, sans-serif;
-      overflow: hidden; touch-action: none;
-    }
-
-    /* Common */
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: #fff; font-family: Arial, sans-serif; overflow: hidden; touch-action: none; }
     .hidden { display: none !important; }
     button { padding: 15px; border-radius: 8px; border: none; font-weight: bold; font-size: 16px; color: #fff; cursor: pointer; }
     .btn-blue { background: #1f6feb; }
     .btn-green { background: #238636; }
-    .btn-red { background: #f85149; }
-
+    
     /* Main Menu */
-    #mainMenu {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      height: 100vh; gap: 20px; padding: 20px; text-align: center;
+    #mainMenu { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; padding: 20px; text-align: center; }
+    .menu-box { background: #111; padding: 30px; border-radius: 12px; border: 1px solid #30363d; max-width: 400px; width: 100%;}
+
+    /* Camera Sender UI (Mobile 1) - FIXED */
+    #senderUI { position: relative; width: 100vw; height: 100vh; background: #000; }
+    #senderVideo { width: 100%; height: 100%; object-fit: cover; }
+    
+    /* PIN Box is now floating on top of the video */
+    .sender-controls { 
+        position: absolute; 
+        bottom: 30px; 
+        left: 50%; 
+        transform: translateX(-50%);
+        background: rgba(15, 15, 15, 0.85); 
+        padding: 20px; 
+        border-radius: 15px; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 15px; 
+        width: 85%; 
+        max-width: 350px;
+        z-index: 100; 
+        border: 2px solid #58a6ff;
+        backdrop-filter: blur(5px);
     }
-    .menu-box { background: #111; padding: 30px; border-radius: 12px; border: 1px solid #30363d; max-width: 400px;}
+    input.pin-input { padding: 15px; font-size: 22px; width: 100%; box-sizing: border-box; text-align: center; border-radius: 8px; border: 1px solid #fff; background: #000; color: #fff; letter-spacing: 5px; font-weight: bold;}
 
-    /* Camera Sender UI (Phone 1) */
-    #senderUI { display: flex; flex-direction: column; height: 100vh; }
-    #senderVideo { flex: 1; width: 100%; background: #000; object-fit: cover; }
-    .sender-controls { padding: 20px; background: #111; display: flex; gap: 10px; align-items: center;}
-    input.pin-input { padding: 15px; font-size: 18px; width: 150px; text-align: center; border-radius: 8px; border: 1px solid #58a6ff; background: #000; color: #fff; }
-
-    /* Display Receiver UI (Phone 2) */
+    /* Display Receiver UI (Laptop / Mobile 2) */
     #receiverUI { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
     #receiverVideo { position: absolute; width: 100%; height: 100%; object-fit: contain; transform-origin: center center; transition: transform 0.1s ease, filter 0.1s ease; }
     
-    #tempOverlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; mix-blend-mode: overlay; }
+    #tempOverlay { position: absolute; inset: 0; pointer-events: none; z-index: 10; mix-blend-mode: overlay; transition: background 0.2s ease;}
     #ghostTarget { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; height: 300px; border: 3px dashed rgba(255, 255, 255, 0.6); border-radius: 50%; pointer-events: none; z-index: 20; display: none; }
     #ghostTarget.active { display: block; }
 
     #hud { position: fixed; top: 15px; left: 15px; z-index: 30; padding: 15px; border-radius: 8px; background: rgba(0,0,0,0.8); font-size: 16px; border: 1px solid #3fb950; color: #3fb950;}
-
     #toggleBtn { position: fixed; top: 15px; right: 15px; z-index: 50; width: 45px; height: 45px; border: none; border-radius: 50%; background: rgba(255,255,255,0.2); color: #fff; font-size: 24px; cursor: pointer; }
 
-    #controls {
-      position: fixed; bottom: 0; left: 0; width: 100%; max-height: 60vh; overflow-y: auto; background: rgba(15, 15, 15, 0.95);
-      z-index: 40; padding: 20px; box-sizing: border-box; border-top: 2px solid #58a6ff; transition: transform 0.3s ease;
-    }
+    #controls { position: fixed; bottom: 0; left: 0; width: 100%; max-height: 60vh; overflow-y: auto; background: rgba(15, 15, 15, 0.95); z-index: 40; padding: 20px; box-sizing: border-box; border-top: 2px solid #58a6ff; transition: transform 0.3s ease; }
     #controls.hidden { transform: translateY(100%); }
 
     /* Grid & Sliders */
@@ -68,13 +72,13 @@
   <div id="mainMenu">
     <h2>Live Relay Setup</h2>
     <div class="menu-box">
-      <h3 style="color: #3fb950;">Mobile 2 (Laptop ke samne)</h3>
-      <p>Is mobile ki screen par live feed aur zoom/pan controls dikhenge.</p>
+      <h3 style="color: #3fb950;">Laptop / Screen</h3>
+      <p>Click here to show the Live Feed.</p>
       <button class="btn-green" onclick="startReceiver()">I am the DISPLAY</button>
     </div>
     <div class="menu-box">
-      <h3 style="color: #58a6ff;">Mobile 1 (Aapke hath mein)</h3>
-      <p>Yeh mobile aapka face live capture karega.</p>
+      <h3 style="color: #58a6ff;">Mobile in Hand</h3>
+      <p>Click here to open camera and stream.</p>
       <button class="btn-blue" onclick="startSender()">I am the CAMERA</button>
     </div>
   </div>
@@ -82,15 +86,14 @@
   <div id="senderUI" class="hidden">
     <video id="senderVideo" autoplay playsinline muted></video>
     <div class="sender-controls">
-      <input type="number" id="targetPin" class="pin-input" placeholder="Enter PIN">
-      
-      <button id="connectBtn" class="btn-blue" style="flex: 1;" onclick="connectToReceiver()">Connect & Send Live</button>
-      
+      <div style="text-align: center; color: #58a6ff; margin-bottom: 5px; font-weight: bold;">Enter PIN from Display</div>
+      <input type="number" id="targetPin" class="pin-input" placeholder="----">
+      <button id="connectBtn" class="btn-blue" style="width: 100%;" onclick="connectToReceiver()">Connect Live</button>
     </div>
   </div>
 
   <div id="receiverUI" class="hidden">
-    <div id="hud">Generating PIN...</div>
+    <div id="hud">Initializing...</div>
     <button id="toggleBtn" onclick="document.getElementById('controls').classList.toggle('hidden')">⚙️</button>
 
     <video id="receiverVideo" autoplay playsinline muted></video>
@@ -114,46 +117,42 @@
     </div>
   </div>
 
- <script>
+  <script>
     const PREFIX = "vijeet-live-";
     let myPeer = null;
     let localStream = null;
 
-    // Google STUN Servers to bypass Jio/Airtel Network Restrictions
+    // Google STUN Servers to bypass network blocks
     const peerOptions = {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
+          { urls: 'stun:stun1.l.google.com:19302' }
         ]
       }
     };
 
-    // --- RECEIVER LOGIC (DISPLAY PHONE - Laptop ke samne) ---
+    // --- RECEIVER (LAPTOP/SCREEN) ---
     function startReceiver() {
       document.getElementById('mainMenu').classList.add('hidden');
       document.getElementById('receiverUI').classList.remove('hidden');
 
       const myPin = Math.floor(1000 + Math.random() * 9000);
-      document.getElementById('hud').innerText = "Connecting to Relay Server...";
+      document.getElementById('hud').innerText = "Connecting Server...";
 
-      // Connect with STUN servers
       myPeer = new Peer(PREFIX + myPin, peerOptions);
 
       myPeer.on('open', (id) => {
-        document.getElementById('hud').innerHTML = `PIN: <b style="font-size:24px; color:#fff;">${myPin}</b><br><small>Enter this in Mobile 1</small>`;
+        document.getElementById('hud').innerHTML = `PIN: <b style="font-size:24px; color:#fff;">${myPin}</b><br><small>Enter this in your Mobile</small>`;
       });
 
       myPeer.on('call', (call) => {
-        document.getElementById('hud').innerText = "Incoming Stream... Please wait";
-        call.answer(); // Answer the call
+        document.getElementById('hud').innerText = "Incoming Stream...";
+        call.answer(); 
         
         call.on('stream', (remoteStream) => {
           const videoEl = document.getElementById('receiverVideo');
           videoEl.srcObject = remoteStream;
-          
-          // Force play for mobile browsers
           videoEl.play().then(() => {
               document.getElementById('hud').innerText = "LIVE CONNECTED!";
               setTimeout(() => document.getElementById('hud').classList.add('hidden'), 3000);
@@ -163,19 +162,14 @@
         });
       });
 
-      myPeer.on('error', (err) => {
-        document.getElementById('hud').innerText = "Error: " + err.type;
-      });
-      
+      myPeer.on('error', (err) => { document.getElementById('hud').innerText = "Error: " + err.type; });
       setupControls();
     }
 
-    // --- SENDER LOGIC (CAMERA PHONE - Hath mein) ---
+    // --- SENDER (MOBILE PHONE) ---
     async function startSender() {
       document.getElementById('mainMenu').classList.add('hidden');
       document.getElementById('senderUI').classList.remove('hidden');
-      
-      const connectBtn = document.getElementById('connectBtn'); // Humne button ko ID de di hai neche
       
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 } }, audio: false });
@@ -184,35 +178,28 @@
         senderVid.play();
         
         myPeer = new Peer(peerOptions); 
-        
-        myPeer.on('open', () => {
-             // Ready to call
-        });
-
-      } catch (err) { alert("Camera Permission Denied: " + err.message); }
+      } catch (err) { alert("Camera Error: Please Allow Camera Permission!"); }
     }
 
     function connectToReceiver() {
       const pin = document.getElementById('targetPin').value;
-      if (pin.length < 4) return alert("Please enter the 4-digit PIN showing on Mobile 2");
+      if (pin.length < 4) return alert("Please enter the 4-digit PIN showing on Laptop");
 
       const controlsDiv = document.querySelector('.sender-controls');
-      controlsDiv.innerHTML = `<h3 style="color:#d29922; margin:0 auto;">Connecting to ${pin}...</h3>`;
+      controlsDiv.innerHTML = `<h3 style="color:#d29922; margin:0 auto; text-align:center;">Connecting to ${pin}...</h3>`;
 
       const call = myPeer.call(PREFIX + pin, localStream);
       
-      call.on('stream', () => { /* Receiver doesnt send stream back */ });
-      
-      // Update UI if connection seems to hold
       setTimeout(() => {
-         controlsDiv.innerHTML = `<h3 style="color:#3fb950; margin:0 auto;">🟢 STREAMING LIVE TO LAPTOP</h3>`;
+         controlsDiv.innerHTML = `<h3 style="color:#3fb950; margin:0 auto; text-align:center;">🟢 STREAMING LIVE TO LAPTOP</h3>`;
       }, 1500);
     }
 
-    // --- UI & CONTROLS (RECEIVER) ---
+    // --- UI CONTROLS ---
     function setupControls() {
-      const elements = ['zoom', 'panX', 'panY', 'brightness', 'contrast', 'temperature', 'mirror', 'showGhost'];
-      elements.forEach(id => document.getElementById(id).addEventListener('input', updateView));
+      ['zoom', 'panX', 'panY', 'brightness', 'contrast', 'temperature', 'mirror', 'showGhost'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateView);
+      });
       updateView();
     }
 
@@ -251,12 +238,10 @@
     async function startPresentation() {
       document.body.classList.add('stealth-mode');
       const video = document.getElementById('receiverVideo');
-      
       if (document.documentElement.requestFullscreen) {
         try { await document.documentElement.requestFullscreen(); } catch (e) {}
       }
       try { await video.play(); } catch(e) {}
-
       document.body.addEventListener('dblclick', exitPresentation);
     }
 
